@@ -33,7 +33,7 @@ def OLS_regress(xs, ys):
     b_coef, m_coef = result.params
     b_err, m_err = result.bse
 
-    return m_coef, m_err
+    return m_coef, m_err, b_coef
 
 def TC_exponents():
 
@@ -42,27 +42,27 @@ def TC_exponents():
     z_select_val = 'mean_void_size'
     w_select_val = 'n_edges'
 
-    with open('hybrid_mCherry_TCs_projected_analyzed.p', 'rb') as f:
+    with open('TCs_Tr9_analyzed.p', 'rb') as f:
         data = pickle.load(f)
 
-    bad_rows = data[(data['instar'] == 4) & (data['number'] == 9)].index
-    data = data.drop(index=bad_rows)
+    # bad_rows = data[(data['instar'] == 4) & (data['number'] == 9)].index
+    # data = data.drop(index=bad_rows)
 
     As = []
     Ls = []
     Rs = []
     Bs = []
 
-    for ind in [1, 2, 4]:
+    for ind in [1, 2, 3]:
         select = data[(data['instar'] == ind)]
         As += list(np.log10(np.array(select[x_select_val])))
         Ls += list(np.log10(np.array(select[y_select_val])))
         Rs += list(np.log10(np.array(select[z_select_val])))
         Bs += list(np.log10(np.array(select[w_select_val])))
 
-    alpha, alpha_err = OLS_regress(np.array(As), np.array(Ls))
-    beta, beta_err = OLS_regress(np.array(As), np.array(Rs))
-    gamma, gamma_err = OLS_regress(np.array(As), np.array(Bs))
+    alpha, alpha_err, alpha_b = OLS_regress(np.array(As), np.array(Ls))
+    beta, beta_err, beta_b = OLS_regress(np.array(As), np.array(Rs))
+    gamma, gamma_err, gamma_b = OLS_regress(np.array(As), np.array(Bs))
 
     return alpha, alpha_err, beta, beta_err, gamma, gamma_err
 
@@ -108,7 +108,7 @@ def make_contour_plot(A, xvals, yvals, append = ''):
     plt.savefig('plots/smooth_contour_filled' + append + '.pdf', bbox_inches='tight')
 
 
-def make_scatter_plot(alphas, betas, alpha_errs, beta_errs, color_arr, inds = [], append = ''):
+def make_scatter_plot(alphas, betas, alpha_errs, beta_errs, color_arr, inds = [], append = '', title = ''):
 
     fig, ax = plt.subplots(figsize=(5.2, 2.8))
 
@@ -138,6 +138,23 @@ def make_scatter_plot(alphas, betas, alpha_errs, beta_errs, color_arr, inds = []
         # plt.errorbar(x, y, xerr=ex, yerr=ey, markersize=3,
         #              ls='none', marker='o', capsize=0, zorder = 0, color = color, alpha = 0.6)
 
+    fit_m, fit_m_err, fit_b = OLS_regress(alphas, betas)
+
+    fit_x = [np.min(alphas), np.max(alphas)]
+    fit_y = [fit_m*x + fit_b for x in fit_x]
+
+    plt.plot(fit_x, fit_y, color = 'k')
+
+    plt.text(0.5, 0.02, r'slope = ' + str(round(fit_m, 2)) + r' $\pm$ ' + str(round(fit_m_err, 2)))
+
+    params = title.split('_')
+
+    plt.text(1, 0.45, r'$\theta_1 = \pi/$' + params[1])
+    if params[3] == '1':
+        plt.text(1, 0.4, r'$\theta_2 = \pi$')
+    else:
+        plt.text(1, 0.4, r'$\theta_2 = \pi/$' + params[3])
+
 
     for ind in inds:
         plt.scatter(alphas[ind], betas[ind], color = 'k', marker = 'o', s=20, zorder=3)
@@ -155,10 +172,13 @@ def make_scatter_plot(alphas, betas, alpha_errs, beta_errs, color_arr, inds = []
     plt.axis([0.45, 1.25, -0.05, 0.55])
     plt.gca().set_aspect('equal', adjustable='box')
 
-    plt.savefig('plots/alpha_beta_scatter_' + append + '.pdf', bbox_inches='tight')
+    #if title != '': plt.title(title)
+
+    plt.savefig('plots/alpha_beta_scatter_' + append + '_no_example_pts' + '.pdf', bbox_inches='tight')
     plt.clf()
 
 TC_alpha, TC_alpha_err, TC_beta, TC_beta_err, TC_gamma, TC_gamma_err = TC_exponents()
+print('TC exponents:', TC_alpha, TC_alpha_err, TC_beta, TC_beta_err, TC_gamma, TC_gamma_err)
 
 colorMap = 'plasma_r'
 cmapName = 'plasma'
@@ -168,47 +188,99 @@ cmapName = 'yellow_blue'
 
 lower_clim = 0
 upper_clim = 30
-identifier = '_' + cmapName + '_abridged_lim_30_no_b0'
 
-with open('param_sweep_results.p', 'rb') as f:
-    data = pickle.load(f)
+def main_plot():
 
-ss = sorted(set(list(data['s'])))
-bs = sorted(set(list(data['b'])))
-ss = ss[:21]
-bs = bs[1:23]
+    lower_clim = 0
+    upper_clim = 30
+    identifier = '_' + cmapName + '_abridged_lim_30_no_b0'
 
-print(ss)
-print(bs)
+    with open('param_sweep_results.p', 'rb') as f:
+        data = pickle.load(f)
 
-D = np.zeros((len(ss), len(bs)))
-for i in range(len(ss)):
-    for j in range(len(bs)):
-        select = data[(data['s'] == ss[i]) & (data['b'] == bs[j])]
-        D[i, j] = select['alpha_res'] + select['beta_res']
+    ss = sorted(set(list(data['s'])))
+    bs = sorted(set(list(data['b'])))
+    ss = ss[:21]
+    bs = bs[1:23]
 
-print('minimal res:', np.min(D))
-inds = np.unravel_index(D.argmin(), D.shape)
-print('best fit params:', ss[inds[0]], bs[inds[1]])
+    print(ss)
+    print(bs)
 
-make_contour_plot(D, bs, ss, append = identifier + '10_20')
-plt.clf()
+    D = np.zeros((len(ss), len(bs)))
+    for i in range(len(ss)):
+        for j in range(len(bs)):
+            select = data[(data['s'] == ss[i]) & (data['b'] == bs[j])]
+            D[i, j] = select['alpha_res'] + select['beta_res']
 
-select = data[(data['s'] <= 0.002) & (data['b'] <= 0.1) & (data['b'] != 0)]
-#select = data
+    print('minimal res:', np.min(D))
+    inds = np.unravel_index(D.argmin(), D.shape)
+    print('best fit params:', ss[inds[0]], bs[inds[1]])
 
-alphas = select['alpha']
-betas = select['beta']
-alpha_errs = select['alpha_err']
-beta_errs = select['beta_err']
-residuals = select['alpha_res'] + select['beta_res']
+    make_contour_plot(D, bs, ss, append = identifier + '10_20')
+    plt.clf()
 
-ss = data['s']
-bs = data['b']
+    select = data[(data['s'] <= 0.002) & (data['b'] <= 0.1) & (data['b'] != 0)]
+    #select = data
 
-##find the three sample points to draw
-[ind1] = set(np.where(ss == 0.001)[0]) & set(np.where(bs == 0.02)[0])
-[ind2] = set(np.where(ss == 0.0007)[0]) & set(np.where(bs == 0.055)[0])
-[ind3] = set(np.where(ss == 0.0002)[0]) & set(np.where(bs == 0.08)[0])
+    alphas = select['alpha']
+    betas = select['beta']
+    alpha_errs = select['alpha_err']
+    beta_errs = select['beta_err']
+    residuals = select['alpha_res'] + select['beta_res']
 
-make_scatter_plot(alphas, betas, alpha_errs, beta_errs, residuals, inds = [ind1, ind2, ind3], append = identifier)
+    ss = data['s']
+    bs = data['b']
+
+    ##find the three sample points to draw
+    [ind1] = set(np.where(ss == 0.001)[0]) & set(np.where(bs == 0.02)[0])
+    [ind2] = set(np.where(ss == 0.0007)[0]) & set(np.where(bs == 0.055)[0])
+    [ind3] = set(np.where(ss == 0.0002)[0]) & set(np.where(bs == 0.08)[0])
+
+    make_scatter_plot(alphas, betas, alpha_errs, beta_errs, residuals, inds = [ind1, ind2, ind3], append = identifier)
+
+def supplemental_plots():
+
+    for f1 in [4, 9, 14]:
+        for f2 in [1, 2, 4]:
+
+            type = 'f1_' + str(f1) + '_f2_' + str(f2)
+
+            #data = pickle.load(open('mini_param_sweeps/info_' + type + '.p', 'rb'))
+            savefile = 'mini_param_sweeps/results_' + type
+
+            with open(savefile + '.p', 'rb') as f:
+                data = pickle.load(f)
+
+            # ss = sorted(set(list(data['s'])))
+            # bs = sorted(set(list(data['b'])))
+            # ss = ss[:21]
+            # bs = bs[1:23]
+            #
+            # print(ss)
+            # print(bs)
+            #
+            # D = np.zeros((len(ss), len(bs)))
+            # for i in range(len(ss)):
+            #     for j in range(len(bs)):
+            #         select = data[(data['s'] == ss[i]) & (data['b'] == bs[j])]
+            #         D[i, j] = select['alpha_res'] + select['beta_res']
+            #
+            # print('minimal res:', np.min(D))
+            # inds = np.unravel_index(D.argmin(), D.shape)
+            # print('best fit params:', ss[inds[0]], bs[inds[1]])
+            #
+            # make_contour_plot(D, bs, ss, append=identifier + '10_20')
+            # plt.clf()
+
+            select = data[(data['s'] <= 0.002) & (data['b'] <= 0.1) & (data['b'] != 0)]
+
+            alphas = select['alpha']
+            betas = select['beta']
+            alpha_errs = select['alpha_err']
+            beta_errs = select['beta_err']
+            residuals = select['alpha_res'] + select['beta_res']
+
+            make_scatter_plot(alphas, betas, alpha_errs, beta_errs, residuals, append=type, title = type)
+
+
+supplemental_plots()
